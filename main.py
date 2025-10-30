@@ -17,7 +17,7 @@ def read_csv_to_dict(file_path):
     return program_ratings
 
 # Path to the CSV file
-file_path = '/program_ratings.csv'
+file_path = 'https://github.com/zamarul596/tutorial_week6/blob/main/program_ratings.csv'
 
 # Get the data in the required format
 program_ratings_dict = read_csv_to_dict(file_path)
