@@ -1,31 +1,34 @@
 import csv
-import requests
 import io
+import requests
 
-# Correct raw link
-file_url = "https://raw.githubusercontent.com/zamarul596/tutorial_week6/main/program_ratings.csv"
-
-# Download the file from GitHub
-response = requests.get(file_url)
-response.raise_for_status()  # ensure success
-
-# Read CSV directly from memory
-def read_csv_to_dict(file_like):
+def read_csv_to_dict(file_url):
     program_ratings = {}
+
+    # Download CSV file directly from GitHub RAW link
+    response = requests.get(file_url)
+    response.raise_for_status()  # make sure it loads correctly
+    file_like = io.StringIO(response.text)
+
     reader = csv.reader(file_like)
-    header = next(reader)
+    header = next(reader)  # skip header
+
     for row in reader:
         program = row[0]
         ratings = [float(x) for x in row[1:]]
         program_ratings[program] = ratings
+
     return program_ratings
 
-# Pass downloaded text as file-like object
-program_ratings_dict = read_csv_to_dict(io.StringIO(response.text))
 
-# Print the result (you can also return or process it further)
+file_url = "https://raw.githubusercontent.com/zamarul596/tutorial_week6/main/program_ratings.csv"
+
+program_ratings_dict = read_csv_to_dict(file_url)
+
+# Print to confirm
 for program, ratings in program_ratings_dict.items():
-    print(f"'{program}': {ratings},")
+    print(f"{program}: {ratings}")
+
 
 
 import random
