@@ -57,10 +57,34 @@ if uploaded_file:
     st.subheader("Programs and Ratings Loaded")
     st.dataframe(ratings)
 
+    #######################################
+    # 3. Parameter Input Section
+    #######################################
+    st.subheader("⚙️ Genetic Algorithm Parameters")
+
+    # Default values and interactive sliders
+    CO_R = st.slider(
+        "Crossover Rate (CO_R)",
+        min_value=0.0,
+        max_value=0.95,
+        value=0.8,
+        step=0.01,
+        help="Controls how often crossover occurs between parents (0 to 0.95)."
+    )
+
+    MUT_R = st.slider(
+        "Mutation Rate (MUT_R)",
+        min_value=0.01,
+        max_value=0.05,
+        value=0.02,
+        step=0.01,
+        help="Controls how often mutations occur in offspring (0.01 to 0.05)."
+    )
+
+    st.write(f"✅ Using Crossover Rate = {CO_R} and Mutation Rate = {MUT_R}")
+
     GEN = 100
     POP = 50
-    CO_R = 0.8
-    MUT_R = 0.2
     EL_S = 2
 
     all_programs = list(ratings.keys())
@@ -128,25 +152,26 @@ if uploaded_file:
     #######################################
     # Run Algorithm
     #######################################
-    st.subheader("Running Genetic Algorithm...")
-    initial_schedule = all_programs.copy()
-    random.shuffle(initial_schedule)
+    if st.button("🚀 Run Genetic Algorithm"):
+        st.subheader("Running Genetic Algorithm...")
+        initial_schedule = all_programs.copy()
+        random.shuffle(initial_schedule)
 
-    best_schedule = genetic_algorithm(initial_schedule)
+        best_schedule = genetic_algorithm(initial_schedule)
 
-    #######################################
-    # Display Results
-    #######################################
-    st.subheader("Final Optimal Schedule")
-    total_rating = 0
-    results = []
-    for time_slot, program in enumerate(best_schedule):
-        hour = all_time_slots[time_slot]
-        rating = ratings[program][time_slot]
-        total_rating += rating
-        results.append({"Time Slot": f"{hour:02d}:00", "Program": program, "Rating": rating})
+        #######################################
+        # Display Results
+        #######################################
+        st.subheader("🏆 Final Optimal Schedule")
+        total_rating = 0
+        results = []
+        for time_slot, program in enumerate(best_schedule):
+            hour = all_time_slots[time_slot]
+            rating = ratings[program][time_slot]
+            total_rating += rating
+            results.append({"Time Slot": f"{hour:02d}:00", "Program": program, "Rating": rating})
 
-    st.dataframe(results)
-    st.success(f"Total Ratings: {total_rating:.2f}")
+        st.dataframe(results)
+        st.success(f"Total Ratings: {total_rating:.2f}")
 else:
     st.info("Upload a CSV file to start.")
