@@ -5,7 +5,7 @@ import random
 import pandas as pd
 
 #######################################
-# Function to read CSV with times
+# Function to read CSV (Reads header for time slots)
 #######################################
 def read_csv_to_dict(file_path):
     p = Path(file_path)
@@ -18,22 +18,22 @@ def read_csv_to_dict(file_path):
 
     with p.open(mode='r', newline='', encoding='utf-8') as file:
         reader = csv.reader(file)
-        header = next(reader, None)
-        if not header:
+        try:
+            header = next(reader)
+            time_slots = header[1:]  # everything after the first column (program names)
+        except StopIteration:
             return {}, []
-
-        # Extract time slots from header (columns after first)
-        time_slots = header[1:]
 
         for row in reader:
             if not row:
                 continue
             program = row[0].strip()
-            try:
-                ratings = [float(x) for x in row[1:] if x != ""]
-            except ValueError as e:
-                st.error(f"Invalid numeric value in CSV for program '{program}': {e}")
-                return {}, []
+            ratings = []
+            for x in row[1:]:
+                if x.strip() == "":
+                    ratings.append(0.0)  # fill missing with 0
+                else:
+                    ratings.append(float(x))
             program_ratings[program] = ratings
 
     return program_ratings, time_slots
@@ -122,14 +122,14 @@ def display_schedule(schedule, ratings, time_slots, title, co_r, mut_r):
     df = pd.DataFrame(results)
     st.subheader(title)
     st.write(f"**Crossover Rate:** {co_r} | **Mutation Rate:** {mut_r}")
-    st.dataframe(df)
+    st.dataframe(df, use_container_width=True)
     st.success(f"Total Ratings: {total_rating:.2f}")
 
 
 #######################################
 # Streamlit Interface
 #######################################
-st.title("📺 Optimal TV Program Scheduler (Genetic Algorithm)")
+st.title("Optimal TV Program Scheduler (Genetic Algorithm)")
 st.write("This app finds the best TV program schedule using a Genetic Algorithm.")
 
 st.markdown("### Step 1: Set Parameters for Each Trial")
@@ -178,8 +178,7 @@ if uploaded_file:
 
     st.markdown("### Step 3: Run the Genetic Algorithm")
     if st.button("Run All Trials"):
-        # Run default + 3 trials
-        st.header("🧠 Final Optimal Schedules")
+        st.header("Final Optimal Schedules")
 
         # Default Run
         best_default = genetic_algorithm(ratings, all_programs,
