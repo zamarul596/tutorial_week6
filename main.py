@@ -35,13 +35,16 @@ def read_csv_to_dict(file_path):
 
 
 #######################################
-# 2. Load CSV
+# 2. Streamlit UI Setup
 #######################################
 st.title("📺 Optimal TV Program Scheduler (Genetic Algorithm)")
 st.write("Upload your program ratings CSV file below:")
 
 uploaded_file = st.file_uploader("Upload program_ratings.csv", type=["csv"])
 
+#######################################
+# 3. Once File Uploaded
+#######################################
 if uploaded_file:
     # Save uploaded file temporarily
     temp_path = Path("program_ratings.csv")
@@ -58,11 +61,10 @@ if uploaded_file:
     st.dataframe(ratings)
 
     #######################################
-    # 3. Parameter Input Section
+    # 4. Parameter Input Section
     #######################################
     st.subheader("⚙️ Genetic Algorithm Parameters")
 
-    # Default values and interactive sliders
     CO_R = st.slider(
         "Crossover Rate (CO_R)",
         min_value=0.0,
@@ -81,7 +83,7 @@ if uploaded_file:
         help="Controls how often mutations occur in offspring (0.01 to 0.05)."
     )
 
-    st.write(f"✅ Using Crossover Rate = {CO_R} and Mutation Rate = {MUT_R}")
+    st.info(f"Selected → Crossover Rate: **{CO_R}**, Mutation Rate: **{MUT_R}**")
 
     GEN = 100
     POP = 50
@@ -92,7 +94,7 @@ if uploaded_file:
     all_time_slots = list(range(6, 6 + num_slots))
 
     #######################################
-    # Fitness Function
+    # 5. Genetic Algorithm Components
     #######################################
     def fitness_function(schedule):
         total_rating = 0
@@ -150,7 +152,7 @@ if uploaded_file:
         return population[0]
 
     #######################################
-    # Run Algorithm
+    # 6. Run Algorithm Button
     #######################################
     if st.button("🚀 Run Genetic Algorithm"):
         st.subheader("Running Genetic Algorithm...")
@@ -160,7 +162,7 @@ if uploaded_file:
         best_schedule = genetic_algorithm(initial_schedule)
 
         #######################################
-        # Display Results
+        # 7. Display Results
         #######################################
         st.subheader("🏆 Final Optimal Schedule")
         total_rating = 0
@@ -173,5 +175,6 @@ if uploaded_file:
 
         st.dataframe(results)
         st.success(f"Total Ratings: {total_rating:.2f}")
+
 else:
     st.info("Upload a CSV file to start.")
