@@ -147,6 +147,6 @@ if uploaded_file:
         results.append({"Time Slot": f"{hour:02d}:00", "Program": program, "Rating": rating})
 
     st.dataframe(results)
-    st.success(f"🏆 Total Ratings: {total_rating:.2f}")
+    st.success(f"Total Ratings: {total_rating:.2f}")
 else:
-    st.info("👆 Please upload a CSV file to start.")
+    st.info("Upload a CSV file to start.")
