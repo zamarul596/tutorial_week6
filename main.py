@@ -2,6 +2,7 @@ import streamlit as st
 import csv
 from pathlib import Path
 import random
+import pandas as pd
 
 #######################################
 # 1. Read CSV File
@@ -35,18 +36,14 @@ def read_csv_to_dict(file_path):
 
 
 #######################################
-# 2. Streamlit UI Setup
+# 2. Streamlit Interface
 #######################################
 st.title("📺 Optimal TV Program Scheduler (Genetic Algorithm)")
 st.write("Upload your program ratings CSV file below:")
 
 uploaded_file = st.file_uploader("Upload program_ratings.csv", type=["csv"])
 
-#######################################
-# 3. Once File Uploaded
-#######################################
 if uploaded_file:
-    # Save uploaded file temporarily
     temp_path = Path("program_ratings.csv")
     with open(temp_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
@@ -60,41 +57,12 @@ if uploaded_file:
     st.subheader("Programs and Ratings Loaded")
     st.dataframe(ratings)
 
-    #######################################
-    # 4. Parameter Input Section
-    #######################################
-    st.subheader("⚙️ Genetic Algorithm Parameters")
-
-    CO_R = st.slider(
-        "Crossover Rate (CO_R)",
-        min_value=0.0,
-        max_value=0.95,
-        value=0.8,
-        step=0.01,
-        help="Controls how often crossover occurs between parents (0 to 0.95)."
-    )
-
-    MUT_R = st.slider(
-        "Mutation Rate (MUT_R)",
-        min_value=0.01,
-        max_value=0.05,
-        value=0.02,
-        step=0.01,
-        help="Controls how often mutations occur in offspring (0.01 to 0.05)."
-    )
-
-    st.info(f"Selected → Crossover Rate: **{CO_R}**, Mutation Rate: **{MUT_R}**")
-
-    GEN = 100
-    POP = 50
-    EL_S = 2
-
     all_programs = list(ratings.keys())
     num_slots = len(next(iter(ratings.values())))
     all_time_slots = list(range(6, 6 + num_slots))
 
     #######################################
-    # 5. Genetic Algorithm Components
+    # Fitness and GA Functions
     #######################################
     def fitness_function(schedule):
         total_rating = 0
@@ -118,8 +86,8 @@ if uploaded_file:
         schedule[mutation_point] = new_program
         return schedule
 
-    def genetic_algorithm(initial_schedule, generations=GEN, population_size=POP,
-                          crossover_rate=CO_R, mutation_rate=MUT_R, elitism_size=EL_S):
+    def genetic_algorithm(initial_schedule, generations=100, population_size=50,
+                          crossover_rate=0.8, mutation_rate=0.2, elitism_size=2):
 
         population = [initial_schedule.copy()]
         for _ in range(population_size - 1):
@@ -127,7 +95,6 @@ if uploaded_file:
             random.shuffle(random_schedule)
             population.append(random_schedule)
 
-        progress_bar = st.progress(0)
         for generation in range(generations):
             population.sort(key=lambda s: fitness_function(s), reverse=True)
             new_population = population[:elitism_size]
@@ -147,34 +114,51 @@ if uploaded_file:
                 new_population.extend([child1, child2])
 
             population = new_population[:population_size]
-            progress_bar.progress((generation + 1) / generations)
 
         return population[0]
 
     #######################################
-    # 6. Run Algorithm Button
+    # Helper function to display results
     #######################################
-    if st.button("🚀 Run Genetic Algorithm"):
-        st.subheader("Running Genetic Algorithm...")
-        initial_schedule = all_programs.copy()
-        random.shuffle(initial_schedule)
-
-        best_schedule = genetic_algorithm(initial_schedule)
-
-        #######################################
-        # 7. Display Results
-        #######################################
-        st.subheader("🏆 Final Optimal Schedule")
+    def display_results(schedule, co_r, mut_r, title):
         total_rating = 0
         results = []
-        for time_slot, program in enumerate(best_schedule):
+        for time_slot, program in enumerate(schedule):
             hour = all_time_slots[time_slot]
             rating = ratings[program][time_slot]
             total_rating += rating
             results.append({"Time Slot": f"{hour:02d}:00", "Program": program, "Rating": rating})
 
-        st.dataframe(results)
+        df = pd.DataFrame(results)
+        st.subheader(title)
+        st.write(f"**Crossover Rate:** {co_r}, **Mutation Rate:** {mut_r}")
+        st.dataframe(df)
         st.success(f"Total Ratings: {total_rating:.2f}")
+
+    #######################################
+    # Default Run
+    #######################################
+    st.header("🧠 Default Genetic Algorithm Run (Baseline)")
+    default_CO_R = 0.8
+    default_MUT_R = 0.2
+    initial_schedule = all_programs.copy()
+    random.shuffle(initial_schedule)
+    best_default = genetic_algorithm(initial_schedule, crossover_rate=default_CO_R, mutation_rate=default_MUT_R)
+    display_results(best_default, default_CO_R, default_MUT_R, "Default Run Results")
+
+    #######################################
+    # User Trials (3 different parameter sets)
+    #######################################
+    st.header("⚙️ User Trials")
+
+    for i in range(1, 4):
+        st.subheader(f"Trial {i}")
+        co_r = st.slider(f"Trial {i} - Crossover Rate", 0.0, 0.95, 0.8, 0.01, key=f"co_r_{i}")
+        mut_r = st.slider(f"Trial {i} - Mutation Rate", 0.01, 0.05, 0.02, 0.01, key=f"mut_r_{i}")
+        if st.button(f"Run Trial {i}"):
+            random.shuffle(initial_schedule)
+            best_trial = genetic_algorithm(initial_schedule, crossover_rate=co_r, mutation_rate=mut_r)
+            display_results(best_trial, co_r, mut_r, f"Results for Trial {i}")
 
 else:
     st.info("Upload a CSV file to start.")
