@@ -4,7 +4,9 @@ import random
 import sys
 
 
-# Function to read the CSV file and convert it to the desired format
+#######################################
+# 1. Read CSV File
+#######################################
 def read_csv_to_dict(file_path):
     """
     Reads CSV and returns dict mapping program -> list of ratings (floats).
@@ -17,7 +19,6 @@ def read_csv_to_dict(file_path):
     program_ratings = {}
     with p.open(mode='r', newline='', encoding='utf-8') as file:
         reader = csv.reader(file)
-        # Read header to get/validate time slots (we ignore header content except to advance)
         try:
             header = next(reader)
         except StopIteration:
@@ -27,7 +28,6 @@ def read_csv_to_dict(file_path):
             if not row:
                 continue
             program = row[0].strip()
-            # Convert the ratings to floats; ignore empty strings
             try:
                 ratings = [float(x) for x in row[1:] if x != ""]
             except ValueError as e:
@@ -37,82 +37,61 @@ def read_csv_to_dict(file_path):
     return program_ratings
 
 
-# --- Connect to CSV in repository ---
-# Use the CSV that's in the same repo folder as this script: program_ratings.csv
+#######################################
+# 2. Load CSV
+#######################################
 script_dir = Path(__file__).resolve().parent
 file_path = script_dir / "program_ratings.csv"
+
+print("🔍 Looking for:", file_path)
 
 try:
     program_ratings_dict = read_csv_to_dict(file_path)
 except FileNotFoundError as e:
     print(e)
-    print("Ensure 'program_ratings.csv' is located in the same folder as main.py.")
+    print("⚠️ Ensure 'program_ratings.csv' is located in the same folder as main.py.")
     sys.exit(1)
 except Exception as e:
-    print("Error reading CSV:", e)
+    print("❌ Error reading CSV:", e)
     sys.exit(1)
 
-# Print the result (you can also return or process it further)
+if not program_ratings_dict:
+    print("⚠️ CSV file is empty or has no valid data.")
+    sys.exit(1)
+
+print("\n✅ Programs and Ratings Loaded:")
 for program, ratings in program_ratings_dict.items():
-    print(f"'{program}': {ratings},")
+    print(f"  {program}: {ratings}")
 
-
-##################################### DEFINING PARAMETERS AND DATASET ################################################################
-# Sample rating programs dataset for each time slot.
+#######################################
+# 3. Define Parameters
+#######################################
 ratings = program_ratings_dict
 
-GEN = 100
-POP = 50
-CO_R = 0.8
-MUT_R = 0.2
-EL_S = 2
+GEN = 100        # Number of generations
+POP = 50         # Population size
+CO_R = 0.8       # Crossover rate
+MUT_R = 0.2      # Mutation rate
+EL_S = 2         # Elitism size
 
-all_programs = list(ratings.keys())  # all programs
-all_time_slots = list(range(6, 6 + len(next(iter(ratings.values())))))  # time slots length matches CSV columns
+all_programs = list(ratings.keys())
+num_slots = len(next(iter(ratings.values())))
+all_time_slots = list(range(6, 6 + num_slots))
 
-######################################### DEFINING FUNCTIONS ########################################################################
-# defining fitness function
+
+#######################################
+# 4. Fitness Function
+#######################################
 def fitness_function(schedule):
     total_rating = 0
     for time_slot, program in enumerate(schedule):
         total_rating += ratings[program][time_slot]
     return total_rating
 
-# initializing the population (generate all permutations) -- careful: factorial growth
-def initialize_pop(programs):
-    if not programs:
-        return [[]]
 
-    all_schedules = []
-    for i in range(len(programs)):
-        for schedule in initialize_pop(programs[:i] + programs[i + 1:]):
-            all_schedules.append([programs[i]] + schedule)
-
-    return all_schedules
-
-# selection: find best schedule from list
-def finding_best_schedule(all_schedules):
-    best_schedule = []
-    max_ratings = float("-inf")
-
-    for schedule in all_schedules:
-        total_ratings = fitness_function(schedule)
-        if total_ratings > max_ratings:
-            max_ratings = total_ratings
-            best_schedule = schedule
-
-    return best_schedule
-
-# calling the pop func.
-all_possible_schedules = initialize_pop(all_programs)
-
-# callin the schedule func.
-best_schedule = finding_best_schedule(all_possible_schedules)
-
-
-############################################# GENETIC ALGORITHM #############################################################################
-
-# Crossover
+#######################################
+# 5. Genetic Algorithm
+#######################################
 def crossover(schedule1, schedule2):
     if len(schedule1) < 3:
         return schedule1.copy(), schedule2.copy()
@@ -121,7 +100,7 @@ def crossover(schedule1, schedule2):
     child2 = schedule2[:crossover_point] + schedule1[crossover_point:]
     return child1, child2
 
-# mutating
+
 def mutate(schedule):
     if not schedule:
         return schedule
@@ -130,27 +109,26 @@ def mutate(schedule):
     schedule[mutation_point] = new_program
     return schedule
 
-# calling the fitness func.
-def evaluate_fitness(schedule):
-    return fitness_function(schedule)
 
-def genetic_algorithm(initial_schedule, generations=GEN, population_size=POP, crossover_rate=CO_R, mutation_rate=MUT_R, elitism_size=EL_S):
-    population = [initial_schedule]
+def genetic_algorithm(initial_schedule, generations=GEN, population_size=POP,
+                      crossover_rate=CO_R, mutation_rate=MUT_R, elitism_size=EL_S):
+    population = [initial_schedule.copy()]
 
+    # Initialize population with random shuffles
     for _ in range(population_size - 1):
         random_schedule = initial_schedule.copy()
         random.shuffle(random_schedule)
         population.append(random_schedule)
 
-    for generation in range(generations):
-        new_population = []
+    print("\n🚀 Starting Genetic Algorithm Optimization...")
 
-        # Elitism
-        population.sort(key=lambda schedule: fitness_function(schedule), reverse=True)
-        new_population.extend(population[:elitism_size])
+    for generation in range(generations):
+        population.sort(key=lambda s: fitness_function(s), reverse=True)
+        new_population = population[:elitism_size]  # Elitism
 
         while len(new_population) < population_size:
             parent1, parent2 = random.choices(population, k=2)
+
             if random.random() < crossover_rate:
                 child1, child2 = crossover(parent1, parent2)
             else:
@@ -165,21 +143,32 @@ def genetic_algorithm(initial_schedule, generations=GEN, population_size=POP, cr
 
         population = new_population[:population_size]
 
+        # Optional: print progress every 10 generations
+        if (generation + 1) % 10 == 0:
+            best_fit = fitness_function(population[0])
+            print(f"Generation {generation + 1}: Best Fitness = {best_fit:.2f}")
+
+    print("✅ Optimization Complete.")
     return population[0]
 
-##################################################### RESULTS ###################################################################################
 
-# brute force
-initial_best_schedule = finding_best_schedule(all_possible_schedules)
+#######################################
+# 6. Run Optimization
+#######################################
+initial_schedule = all_programs.copy()
+random.shuffle(initial_schedule)
 
-rem_t_slots = len(all_time_slots) - len(initial_best_schedule)
-genetic_schedule = genetic_algorithm(initial_best_schedule, generations=GEN, population_size=POP, elitism_size=EL_S)
+best_schedule = genetic_algorithm(initial_schedule)
 
-final_schedule = initial_best_schedule + genetic_schedule[:rem_t_slots]
+#######################################
+# 7. Display Results
+#######################################
+print("\n🎯 Final Optimal Schedule:")
+total_rating = 0
+for time_slot, program in enumerate(best_schedule):
+    hour = all_time_slots[time_slot]
+    rating = ratings[program][time_slot]
+    total_rating += rating
+    print(f"Time Slot {hour:02d}:00 - Program {program} (Rating: {rating})")
 
-print("\nFinal Optimal Schedule:")
-for time_slot, program in enumerate(final_schedule):
-    hour = all_time_slots[time_slot] if time_slot < len(all_time_slots) else f"slot{time_slot}"
-    print(f"Time Slot {hour:02d}:00 - Program {program}")
-
-print("Total Ratings:", fitness_function(final_schedule))
+print(f"\n🏆 Total Ratings: {total_rating:.2f}")
