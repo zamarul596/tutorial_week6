@@ -6,7 +6,33 @@ import pandas as pd
 
 #######################################
 # Function to read CSV
+#######################################
+def read_csv_to_dict(file_path):
+    p = Path(file_path)
+    if not p.exists():
+        st.error(f"CSV file not found at: {p}")
+        return {}
 
+    program_ratings = {}
+    with p.open(mode='r', newline='', encoding='utf-8') as file:
+        reader = csv.reader(file)
+        try:
+            next(reader)  # skip header
+        except StopIteration:
+            return {}
+
+        for row in reader:
+            if not row:
+                continue
+            program = row[0].strip()
+            try:
+                ratings = [float(x) for x in row[1:] if x != ""]
+            except ValueError as e:
+                st.error(f"Invalid numeric value in CSV for program '{program}': {e}")
+                return {}
+            program_ratings[program] = ratings
+
+    return program_ratings
 
 
 #######################################
