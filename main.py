@@ -22,7 +22,7 @@ def read_csv_to_dict(file_path):
     with p.open(mode='r', newline='', encoding='utf-8') as file:
         reader = csv.reader(file)
         try:
-            next(reader)  # skip header
+            header = next(reader)  # skip header
         except StopIteration:
             return {}
 
@@ -31,7 +31,7 @@ def read_csv_to_dict(file_path):
                 continue
             program = row[0].strip()
             try:
-                ratings = [float(x) for x in row[1:] if x != ""]
+                ratings = [float(x) for x in row[1:] if x.strip() != ""]
             except ValueError as e:
                 st.error(f"Invalid numeric value in CSV for program '{program}': {e}")
                 return {}
@@ -46,7 +46,8 @@ def read_csv_to_dict(file_path):
 def fitness_function(schedule, ratings):
     total_rating = 0
     for time_slot, program in enumerate(schedule):
-        total_rating += ratings[program][time_slot]
+        if time_slot < len(ratings[program]):
+            total_rating += ratings[program][time_slot]
     return total_rating
 
 
@@ -106,26 +107,24 @@ def genetic_algorithm(ratings, all_programs, generations=100, population_size=50
 # Display Schedule Function
 #######################################
 def display_schedule(schedule, ratings, title, co_r, mut_r):
-    # Use max length to ensure we capture all hours until 23:00
     num_slots = max(len(v) for v in ratings.values())
-    all_time_slots = list(range(6, 6 + num_slots))
+    all_time_slots = list(range(6, 6 + num_slots))  # start from 6:00
 
     total_rating = 0
     results = []
     for time_slot, program in enumerate(schedule):
-        if time_slot >= len(all_time_slots):
+        if time_slot >= num_slots:
             break
         hour = all_time_slots[time_slot]
         rating = ratings[program][time_slot]
         total_rating += rating
         results.append({
-            "Time Slot": f"Hour {hour}",
+            "Time Slot": f"{hour:02d}:00",
             "Program": program,
             "Rating": rating
         })
 
     df = pd.DataFrame(results)
-
     st.subheader(title)
     st.write(f"**Crossover Rate:** {co_r} | **Mutation Rate:** {mut_r}")
     st.dataframe(df, use_container_width=True, height=600)
@@ -138,7 +137,7 @@ def display_schedule(schedule, ratings, title, co_r, mut_r):
 st.title("🎬 Optimal TV Program Scheduler (Genetic Algorithm)")
 st.write("This app finds the best TV program schedule using a Genetic Algorithm based on audience ratings.")
 
-# Step 1
+# Step 1: Parameter setup
 st.markdown("### Step 1: Set Parameters for Each Trial")
 
 col1, col2 = st.columns(2)
@@ -154,9 +153,8 @@ with col2:
     st.write("- Crossover Rate (CO_R): 0.0 – 0.95")
     st.write("- Mutation Rate (MUT_R): 0.01 – 0.05")
 
-# Sliders for 3 trials
 st.markdown("---")
-st.markdown("### Trial Parameters")
+st.markdown("### Step 2: Select Parameters for 3 Trials")
 
 trial_params = []
 for i in range(1, 4):
@@ -166,7 +164,7 @@ for i in range(1, 4):
     trial_params.append((co_r, mut_r))
 
 st.markdown("---")
-st.markdown("### Step 2: Upload CSV File")
+st.markdown("### Step 3: Upload CSV File")
 
 uploaded_file = st.file_uploader("Upload your program_ratings.csv file", type=["csv"])
 
@@ -183,7 +181,7 @@ if uploaded_file:
 
     all_programs = list(ratings.keys())
 
-    st.markdown("### Step 3: Run the Genetic Algorithm")
+    st.markdown("### Step 4: Run the Genetic Algorithm")
     if st.button("Run All Trials"):
         st.header("📊 Final Optimal Schedules")
 
@@ -193,11 +191,11 @@ if uploaded_file:
                                          mutation_rate=default_MUT_R)
         display_schedule(best_default, ratings, "Default Run Results", default_CO_R, default_MUT_R)
 
-        # User Trials
+        # User-defined Trials
         for i, (co_r, mut_r) in enumerate(trial_params, start=1):
             best_trial = genetic_algorithm(ratings, all_programs,
                                            crossover_rate=co_r,
                                            mutation_rate=mut_r)
             display_schedule(best_trial, ratings, f"Trial {i} Results", co_r, mut_r)
 else:
-    st.info("Please set parameters and then upload your CSV file to continue.")
+    st.info("Please set parameters above and then upload your CSV file to continue.")
