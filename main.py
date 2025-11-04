@@ -1,20 +1,16 @@
+import streamlit as st
 import csv
 from pathlib import Path
 import random
-import sys
-
 
 #######################################
 # 1. Read CSV File
 #######################################
 def read_csv_to_dict(file_path):
-    """
-    Reads CSV and returns dict mapping program -> list of ratings (floats).
-    Accepts file path (str or Path). Raises FileNotFoundError if not found.
-    """
     p = Path(file_path)
     if not p.exists():
-        raise FileNotFoundError(f"CSV file not found at: {p}")
+        st.error(f"CSV file not found at: {p}")
+        return {}
 
     program_ratings = {}
     with p.open(mode='r', newline='', encoding='utf-8') as file:
@@ -22,7 +18,7 @@ def read_csv_to_dict(file_path):
         try:
             header = next(reader)
         except StopIteration:
-            return program_ratings  # empty file
+            return {}
 
         for row in reader:
             if not row:
@@ -31,7 +27,8 @@ def read_csv_to_dict(file_path):
             try:
                 ratings = [float(x) for x in row[1:] if x != ""]
             except ValueError as e:
-                raise ValueError(f"Invalid numeric value in CSV for program '{program}': {e}")
+                st.error(f"Invalid numeric value in CSV for program '{program}': {e}")
+                return {}
             program_ratings[program] = ratings
 
     return program_ratings
@@ -40,135 +37,116 @@ def read_csv_to_dict(file_path):
 #######################################
 # 2. Load CSV
 #######################################
-script_dir = Path(__file__).resolve().parent
-file_path = script_dir / "program_ratings.csv"
+st.title("📺 Optimal TV Program Scheduler (Genetic Algorithm)")
+st.write("Upload your program ratings CSV file below:")
 
-print("🔍 Looking for:", file_path)
+uploaded_file = st.file_uploader("Upload program_ratings.csv", type=["csv"])
 
-try:
-    program_ratings_dict = read_csv_to_dict(file_path)
-except FileNotFoundError as e:
-    print(e)
-    print("⚠️ Ensure 'program_ratings.csv' is located in the same folder as main.py.")
-    sys.exit(1)
-except Exception as e:
-    print("❌ Error reading CSV:", e)
-    sys.exit(1)
+if uploaded_file:
+    # Save uploaded file temporarily
+    temp_path = Path("program_ratings.csv")
+    with open(temp_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
 
-if not program_ratings_dict:
-    print("⚠️ CSV file is empty or has no valid data.")
-    sys.exit(1)
+    ratings = read_csv_to_dict(temp_path)
 
-print("\n✅ Programs and Ratings Loaded:")
-for program, ratings in program_ratings_dict.items():
-    print(f"  {program}: {ratings}")
+    if not ratings:
+        st.warning("No valid data found in CSV.")
+        st.stop()
 
-#######################################
-# 3. Define Parameters
-#######################################
-ratings = program_ratings_dict
+    st.subheader("Programs and Ratings Loaded")
+    st.dataframe(ratings)
 
-GEN = 100        # Number of generations
-POP = 50         # Population size
-CO_R = 0.8       # Crossover rate
-MUT_R = 0.2      # Mutation rate
-EL_S = 2         # Elitism size
+    GEN = 100
+    POP = 50
+    CO_R = 0.8
+    MUT_R = 0.2
+    EL_S = 2
 
-all_programs = list(ratings.keys())
-num_slots = len(next(iter(ratings.values())))
-all_time_slots = list(range(6, 6 + num_slots))
+    all_programs = list(ratings.keys())
+    num_slots = len(next(iter(ratings.values())))
+    all_time_slots = list(range(6, 6 + num_slots))
 
+    #######################################
+    # Fitness Function
+    #######################################
+    def fitness_function(schedule):
+        total_rating = 0
+        for time_slot, program in enumerate(schedule):
+            total_rating += ratings[program][time_slot]
+        return total_rating
 
-#######################################
-# 4. Fitness Function
-#######################################
-def fitness_function(schedule):
-    total_rating = 0
-    for time_slot, program in enumerate(schedule):
-        total_rating += ratings[program][time_slot]
-    return total_rating
+    def crossover(schedule1, schedule2):
+        if len(schedule1) < 3:
+            return schedule1.copy(), schedule2.copy()
+        crossover_point = random.randint(1, len(schedule1) - 2)
+        child1 = schedule1[:crossover_point] + schedule2[crossover_point:]
+        child2 = schedule2[:crossover_point] + schedule1[crossover_point:]
+        return child1, child2
 
-
-#######################################
-# 5. Genetic Algorithm
-#######################################
-def crossover(schedule1, schedule2):
-    if len(schedule1) < 3:
-        return schedule1.copy(), schedule2.copy()
-    crossover_point = random.randint(1, len(schedule1) - 2)
-    child1 = schedule1[:crossover_point] + schedule2[crossover_point:]
-    child2 = schedule2[:crossover_point] + schedule1[crossover_point:]
-    return child1, child2
-
-
-def mutate(schedule):
-    if not schedule:
+    def mutate(schedule):
+        if not schedule:
+            return schedule
+        mutation_point = random.randint(0, len(schedule) - 1)
+        new_program = random.choice(all_programs)
+        schedule[mutation_point] = new_program
         return schedule
-    mutation_point = random.randint(0, len(schedule) - 1)
-    new_program = random.choice(all_programs)
-    schedule[mutation_point] = new_program
-    return schedule
 
+    def genetic_algorithm(initial_schedule, generations=GEN, population_size=POP,
+                          crossover_rate=CO_R, mutation_rate=MUT_R, elitism_size=EL_S):
 
-def genetic_algorithm(initial_schedule, generations=GEN, population_size=POP,
-                      crossover_rate=CO_R, mutation_rate=MUT_R, elitism_size=EL_S):
-    population = [initial_schedule.copy()]
+        population = [initial_schedule.copy()]
+        for _ in range(population_size - 1):
+            random_schedule = initial_schedule.copy()
+            random.shuffle(random_schedule)
+            population.append(random_schedule)
 
-    # Initialize population with random shuffles
-    for _ in range(population_size - 1):
-        random_schedule = initial_schedule.copy()
-        random.shuffle(random_schedule)
-        population.append(random_schedule)
+        progress_bar = st.progress(0)
+        for generation in range(generations):
+            population.sort(key=lambda s: fitness_function(s), reverse=True)
+            new_population = population[:elitism_size]
 
-    print("\n🚀 Starting Genetic Algorithm Optimization...")
+            while len(new_population) < population_size:
+                parent1, parent2 = random.choices(population, k=2)
+                if random.random() < crossover_rate:
+                    child1, child2 = crossover(parent1, parent2)
+                else:
+                    child1, child2 = parent1.copy(), parent2.copy()
 
-    for generation in range(generations):
-        population.sort(key=lambda s: fitness_function(s), reverse=True)
-        new_population = population[:elitism_size]  # Elitism
+                if random.random() < mutation_rate:
+                    child1 = mutate(child1)
+                if random.random() < mutation_rate:
+                    child2 = mutate(child2)
 
-        while len(new_population) < population_size:
-            parent1, parent2 = random.choices(population, k=2)
+                new_population.extend([child1, child2])
 
-            if random.random() < crossover_rate:
-                child1, child2 = crossover(parent1, parent2)
-            else:
-                child1, child2 = parent1.copy(), parent2.copy()
+            population = new_population[:population_size]
+            progress_bar.progress((generation + 1) / generations)
 
-            if random.random() < mutation_rate:
-                child1 = mutate(child1)
-            if random.random() < mutation_rate:
-                child2 = mutate(child2)
+        return population[0]
 
-            new_population.extend([child1, child2])
+    #######################################
+    # Run Algorithm
+    #######################################
+    st.subheader("Running Genetic Algorithm...")
+    initial_schedule = all_programs.copy()
+    random.shuffle(initial_schedule)
 
-        population = new_population[:population_size]
+    best_schedule = genetic_algorithm(initial_schedule)
 
-        # Optional: print progress every 10 generations
-        if (generation + 1) % 10 == 0:
-            best_fit = fitness_function(population[0])
-            print(f"Generation {generation + 1}: Best Fitness = {best_fit:.2f}")
+    #######################################
+    # Display Results
+    #######################################
+    st.subheader("Final Optimal Schedule")
+    total_rating = 0
+    results = []
+    for time_slot, program in enumerate(best_schedule):
+        hour = all_time_slots[time_slot]
+        rating = ratings[program][time_slot]
+        total_rating += rating
+        results.append({"Time Slot": f"{hour:02d}:00", "Program": program, "Rating": rating})
 
-    print("✅ Optimization Complete.")
-    return population[0]
-
-
-#######################################
-# 6. Run Optimization
-#######################################
-initial_schedule = all_programs.copy()
-random.shuffle(initial_schedule)
-
-best_schedule = genetic_algorithm(initial_schedule)
-
-#######################################
-# 7. Display Results
-#######################################
-print("\n🎯 Final Optimal Schedule:")
-total_rating = 0
-for time_slot, program in enumerate(best_schedule):
-    hour = all_time_slots[time_slot]
-    rating = ratings[program][time_slot]
-    total_rating += rating
-    print(f"Time Slot {hour:02d}:00 - Program {program} (Rating: {rating})")
-
-print(f"\n🏆 Total Ratings: {total_rating:.2f}")
+    st.dataframe(results)
+    st.success(f"🏆 Total Ratings: {total_rating:.2f}")
+else:
+    st.info("👆 Please upload a CSV file to start.")
